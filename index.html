@@ -356,9 +356,6 @@
     let audioEnabled = false;
     let isAudioPlaying = false;
 
-    // Verified public domain audio recording of a flush
-    const flushAudio = new Audio("https://upload.wikimedia.org/wikipedia/commons/3/36/Toilet_Flushing.ogg");
-
     function enableAudio() {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -372,21 +369,53 @@
     }
 
     function playSound(type) {
-      if (!audioEnabled || isAudioPlaying) return;
+      if (!audioEnabled || !audioCtx || isAudioPlaying) return;
+
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
 
       isAudioPlaying = true;
+      const now = audioCtx.currentTime;
 
       if (type === 'flush') {
-        flushAudio.currentTime = 0;
-        flushAudio.play().then(() => {
-          setTimeout(() => { isAudioPlaying = false; }, 3500);
-        }).catch(() => {
-          isAudioPlaying = false;
-        });
+        const duration = 3.5;
+        const bufferSize = audioCtx.sampleRate * duration;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < bufferSize; i++) {
+          const t = i / audioCtx.sampleRate;
+          const modulation = 1 + 0.4 * Math.sin(2 * Math.PI * 4 * t);
+          data[i] = (Math.random() * 2 - 1) * modulation;
+        }
+
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(800, now);
+        filter.frequency.exponentialRampToValueAtTime(300, now + duration * 0.7);
+        filter.frequency.linearRampToValueAtTime(120, now + duration);
+        filter.Q.value = 1.5;
+
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.01, now);
+        gain.gain.linearRampToValueAtTime(0.5, now + 0.2);
+        gain.gain.setValueAtTime(0.4, now + 2.0);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        noise.start(now);
+        noise.stop(now + duration);
+
+        setTimeout(() => { isAudioPlaying = false; }, duration * 1000);
 
       } else if (type === 'tinkle') {
-        if (!audioCtx) { isAudioPlaying = false; return; }
-        const now = audioCtx.currentTime;
         const notes = [1046.50, 1318.51, 1567.98, 2093.00];
         const duration = 2.5;
 
