@@ -356,8 +356,8 @@
     let audioEnabled = false;
     let isAudioPlaying = false;
 
-    // Load actual recorded audio sample for authentic flushing sound
-    const flushAudio = new Audio("https://actions.google.com/sounds/v1/household/toilet_flush.ogg");
+    // Verified public domain audio sample of a toilet flush
+    const flushAudio = new Audio("https://upload.wikimedia.org/wikipedia/commons/3/36/Toilet_Flushing.ogg");
 
     function enableAudio() {
       if (!audioCtx) {
@@ -379,7 +379,7 @@
       if (type === 'flush') {
         flushAudio.currentTime = 0;
         flushAudio.play().then(() => {
-          setTimeout(() => { isAudioPlaying = false; }, 3000);
+          setTimeout(() => { isAudioPlaying = false; }, 3500);
         }).catch(err => {
           isAudioPlaying = false;
         });
