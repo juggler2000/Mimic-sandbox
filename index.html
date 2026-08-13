@@ -105,7 +105,6 @@
       position: relative;
     }
 
-    /* Prominent Custom CSS Visualizations */
     .cylinder {
       width: 55px;
       height: 130px;
@@ -355,10 +354,15 @@
 
     let audioCtx = null;
     let audioEnabled = false;
-    let isAudioPlaying = false; // Prevents 1-second interval interrupts
+    let isAudioPlaying = false; // Gate lock to allow full sound playback
 
     function enableAudio() {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
       audioEnabled = true;
       document.getElementById('audio-btn').innerText = "Audio Active";
       document.getElementById('audio-btn').style.background = "#22c55e";
@@ -445,7 +449,7 @@
       const commonOptions = {
         responsive: true,
         maintainAspectRatio: false,
-        animation: { duration: 600, easing: 'easeInOutQuart' },
+        animation: { duration: 300 },
         plugins: { legend: { display: false } },
         scales: {
           x: { display: false },
