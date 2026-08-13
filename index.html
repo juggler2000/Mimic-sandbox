@@ -356,7 +356,7 @@
     let audioEnabled = false;
     let isAudioPlaying = false;
 
-    // Verified public domain audio sample of a toilet flush
+    // Verified public domain audio recording of a flush
     const flushAudio = new Audio("https://upload.wikimedia.org/wikipedia/commons/3/36/Toilet_Flushing.ogg");
 
     function enableAudio() {
@@ -380,7 +380,7 @@
         flushAudio.currentTime = 0;
         flushAudio.play().then(() => {
           setTimeout(() => { isAudioPlaying = false; }, 3500);
-        }).catch(err => {
+        }).catch(() => {
           isAudioPlaying = false;
         });
 
