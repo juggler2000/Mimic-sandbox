@@ -355,6 +355,7 @@
 
     let audioCtx = null;
     let audioEnabled = false;
+    let isAudioPlaying = false; // Prevents 1-second interval interrupts
 
     function enableAudio() {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -364,12 +365,12 @@
     }
 
     function playSound(type) {
-      if (!audioEnabled || !audioCtx) return;
+      if (!audioEnabled || !audioCtx || isAudioPlaying) return;
 
+      isAudioPlaying = true;
       const now = audioCtx.currentTime;
 
       if (type === 'flush') {
-        // 3.5-second realistic water flush effect using white noise & dynamic filtering
         const duration = 3.5;
         const bufferSize = audioCtx.sampleRate * duration;
         const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
@@ -403,9 +404,12 @@
         noise.start(now);
         noise.stop(now + duration);
 
+        setTimeout(() => { isAudioPlaying = false; }, duration * 1000);
+
       } else if (type === 'tinkle') {
-        // 2.5-second multi-frequency harmonic chime arpeggio
         const notes = [1046.50, 1318.51, 1567.98, 2093.00];
+        const duration = 2.5;
+
         notes.forEach((freq, idx) => {
           const osc = audioCtx.createOscillator();
           const gain = audioCtx.createGain();
@@ -430,6 +434,8 @@
           osc.start(now + idx * 0.15);
           osc.stop(now + idx * 0.15 + 2.2);
         });
+
+        setTimeout(() => { isAudioPlaying = false; }, duration * 1000);
       }
     }
 
