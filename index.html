@@ -354,7 +354,10 @@
 
     let audioCtx = null;
     let audioEnabled = false;
-    let isAudioPlaying = false; // Gate lock to allow full sound playback
+    let isAudioPlaying = false;
+
+    // Load actual recorded audio sample for authentic flushing sound
+    const flushAudio = new Audio("https://actions.google.com/sounds/v1/household/toilet_flush.ogg");
 
     function enableAudio() {
       if (!audioCtx) {
@@ -369,48 +372,21 @@
     }
 
     function playSound(type) {
-      if (!audioEnabled || !audioCtx || isAudioPlaying) return;
+      if (!audioEnabled || isAudioPlaying) return;
 
       isAudioPlaying = true;
-      const now = audioCtx.currentTime;
 
       if (type === 'flush') {
-        const duration = 3.5;
-        const bufferSize = audioCtx.sampleRate * duration;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-
-        for (let i = 0; i < bufferSize; i++) {
-          const t = i / audioCtx.sampleRate;
-          const modulation = 1 + 0.3 * Math.sin(2 * Math.PI * 6 * t);
-          data[i] = (Math.random() * 2 - 1) * modulation;
-        }
-
-        const noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
-
-        const filter = audioCtx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(1200, now);
-        filter.frequency.exponentialRampToValueAtTime(300, now + duration * 0.7);
-        filter.frequency.linearRampToValueAtTime(80, now + duration);
-
-        const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(0.01, now);
-        gain.gain.linearRampToValueAtTime(0.4, now + 0.3);
-        gain.gain.setValueAtTime(0.35, now + 2.0);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        noise.start(now);
-        noise.stop(now + duration);
-
-        setTimeout(() => { isAudioPlaying = false; }, duration * 1000);
+        flushAudio.currentTime = 0;
+        flushAudio.play().then(() => {
+          setTimeout(() => { isAudioPlaying = false; }, 3000);
+        }).catch(err => {
+          isAudioPlaying = false;
+        });
 
       } else if (type === 'tinkle') {
+        if (!audioCtx) { isAudioPlaying = false; return; }
+        const now = audioCtx.currentTime;
         const notes = [1046.50, 1318.51, 1567.98, 2093.00];
         const duration = 2.5;
 
