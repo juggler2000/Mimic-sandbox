@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ISS Urine Tank Real-Time Telemetry Dashboard</title>
+  <!-- Chart.js for charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: #151c2c;
+      --text-color: #e2e8f0;
+      --accent-color: #f59e0b;
+      --border-color: #2a364f;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: var(--accent-color);
+    }
+
+    .status-bar {
+      display: flex;
+      gap: 15px;
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+
+    .status-item {
+      background: var(--card-bg);
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 15px;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 220px;
+      position: relative;
+    }
+
+    .card h3 {
+      margin: 0 0 10px 0;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #94a3b8;
+      width: 100%;
+      text-align: center;
+    }
+
+    .visualization {
+      width: 100%;
+      height: 160px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    /* Custom CSS Visualizations */
+    /* 2. Dial / Gauge */
+    .gauge-wrapper {
+      position: relative;
+      width: 140px;
+      height: 140px;
+    }
+
+    /* 3. Graduated Cylinder */
+    .cylinder {
+      width: 50px;
+      height: 130px;
+      border: 3px solid #64748b;
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+      position: relative;
+      background: rgba(255, 255, 255, 0.05);
+      overflow: hidden;
+    }
+    .cylinder-liquid {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: linear-gradient(180deg, #fef08a 0%, #eab308 100%);
+      transition: height 0.5s ease;
+    }
+    .cylinder-ticks {
+      position: absolute;
+      right: 2px;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-size: 8px;
+      color: #94a3b8;
+    }
+
+    /* 4. Toilet Visualization */
+    .toilet-svg {
+      width: 100px;
+      height: 130px;
+    }
+
+    /* Battery Visualization */
+    .battery-container {
+      width: 80px;
+      height: 130px;
+      border: 4px solid #64748b;
+      border-radius: 8px;
+      position: relative;
+      padding: 3px;
+    }
+    .battery-container::before {
+      content: '';
+      position: absolute;
+      top: -10px;
+      left: 25px;
+      width: 22px;
+      height: 6px;
+      background: #64748b;
+      border-radius: 2px 2px 0 0;
+    }
+    .battery-fill {
+      width: 100%;
+      background: #eab308;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      transition: height 0.5s ease;
+    }
+
+    /* Thermometer */
+    .thermometer {
+      width: 20px;
+      height: 110px;
+      background: #334155;
+      border-radius: 10px;
+      position: relative;
+    }
+    .thermometer-fill {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: #eab308;
+      border-radius: 10px;
+      transition: height 0.5s ease;
+    }
+
+    /* Digital Readout */
+    .digital-display {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 2.8rem;
+      font-weight: bold;
+      color: #fef08a;
+      text-shadow: 0 0 10px rgba(234, 179, 8, 0.5);
+    }
+
+    button {
+      background-color: var(--accent-color);
+      border: none;
+      color: #000;
+      padding: 8px 16px;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>ISS NODE3000005 Urine Tank Level</h1>
+      <small style="color: #64748b;">Telemetry Parameter: ETHOS NODE3000005 Urine Tank [%]</small>
+    </div>
+    <div class="status-bar">
+      <div class="status-item">Value: <span id="current-val" style="color: var(--accent-color); font-weight: bold;">--</span>%</div>
+      <div class="status-item">Source: <span id="source-status">Connecting...</span></div>
+      <button id="audio-btn" onclick="enableAudio()">Enable Audio</button>
+    </div>
+  </header>
+
+  <div class="grid-container">
+    <!-- 1. Time History Curve -->
+    <div class="card">
+      <h3>1. Time History Curve</h3>
+      <div class="visualization"><canvas id="chart1"></canvas></div>
+    </div>
+
+    <!-- 2. Dial Gauge -->
+    <div class="card">
+      <h3>2. Dial Gauge</h3>
+      <div class="visualization"><canvas id="chart2"></canvas></div>
+    </div>
+
+    <!-- 3. Graduated Cylinder -->
+    <div class="card">
+      <h3>3. Graduated Cylinder</h3>
+      <div class="visualization">
+        <div class="cylinder">
+          <div class="cylinder-liquid" id="cylinder-fill"></div>
+        </div>
+        <div class="cylinder-ticks">
+          <span>100</span><span>80</span><span>60</span><span>40</span><span>20</span><span>0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Toilet Graphic -->
+    <div class="card">
+      <h3>4. Toilet Visualizer</h3>
+      <div class="visualization">
+        <svg class="toilet-svg" viewBox="0 0 100 120">
+          <!-- Tank -->
+          <rect x="20" y="10" width="60" height="40" rx="2" fill="none" stroke="#e2e8f0" stroke-width="3"/>
+          <rect id="toilet-tank-fill" x="22" y="12" width="56" height="36" fill="#eab308"/>
+          <!-- Bowl -->
+          <path d="M 30 50 L 70 50 L 65 90 C 65 100 35 100 35 90 Z" fill="none" stroke="#e2e8f0" stroke-width="3"/>
+          <path id="toilet-bowl-fill" d="M 32 65 L 68 65 L 63 88 C 63 95 37 95 37 88 Z" fill="#eab308"/>
+          <!-- Base -->
+          <rect x="35" y="100" width="30" height="10" fill="#e2e8f0"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 5. Vertical Bar Chart -->
+    <div class="card">
+      <h3>5. Vertical Bar Chart</h3>
+      <div class="visualization"><canvas id="chart5"></canvas></div>
+    </div>
+
+    <!-- 6. Horizontal Bar Chart -->
+    <div class="card">
+      <h3>6. Horizontal Bar</h3>
+      <div class="visualization"><canvas id="chart6"></canvas></div>
+    </div>
+
+    <!-- 7. Donut Chart -->
+    <div class="card">
+      <h3>7. Donut Chart</h3>
+      <div class="visualization"><canvas id="chart7"></canvas></div>
+    </div>
+
+    <!-- 8. Pie Chart -->
+    <div class="card">
+      <h3>8. Pie Chart</h3>
+      <div class="visualization"><canvas id="chart8"></canvas></div>
+    </div>
+
+    <!-- 9. Polar Area Chart -->
+    <div class="card">
+      <h3>9. Polar Area</h3>
+      <div class="visualization"><canvas id="chart9"></canvas></div>
+    </div>
+
+    <!-- 10. Radar Chart -->
+    <div class="card">
+      <h3>10. Radar Chart</h3>
+      <div class="visualization"><canvas id="chart10"></canvas></div>
+    </div>
+
+    <!-- 11. Battery Meter -->
+    <div class="card">
+      <h3>11. Battery Gauge</h3>
+      <div class="visualization">
+        <div class="battery-container">
+          <div class="battery-fill" id="battery-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 12. Thermometer Display -->
+    <div class="card">
+      <h3>12. Thermometer Level</h3>
+      <div class="visualization">
+        <div class="thermometer">
+          <div class="thermometer-fill" id="thermo-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 13. Digital Readout -->
+    <div class="card">
+      <h3>13. Seven-Segment Digital</h3>
+      <div class="visualization">
+        <div class="digital-display"><span id="digital-val">00.0</span>%</div>
+      </div>
+    </div>
+
+    <!-- 14. Area Trend Chart -->
+    <div class="card">
+      <h3>14. Filled Area Curve</h3>
+      <div class="visualization"><canvas id="chart14"></canvas></div>
+    </div>
+
+    <!-- 15. Stepped Line Chart -->
+    <div class="card">
+      <h3>15. Stepped Line</h3>
+      <div class="visualization"><canvas id="chart15"></canvas></div>
+    </div>
+
+    <!-- 16. Scatter Plot Point -->
+    <div class="card">
+      <h3>16. Scatter Point Plot</h3>
+      <div class="visualization"><canvas id="chart16"></canvas></div>
+    </div>
+
+    <!-- 17. Bubble Plot -->
+    <div class="card">
+      <h3>17. Dynamic Bubble Chart</h3>
+      <div class="visualization"><canvas id="chart17"></canvas></div>
+    </div>
+
+    <!-- 18. Multi-Level Range Bar -->
+    <div class="card">
+      <h3>18. Capacity vs Remaining</h3>
+      <div class="visualization"><canvas id="chart18"></canvas></div>
+    </div>
+
+    <!-- 19. Sparkline Graph -->
+    <div class="card">
+      <h3>19. Minimal Sparkline</h3>
+      <div class="visualization"><canvas id="chart19"></canvas></div>
+    </div>
+
+    <!-- 20. Progress Ring -->
+    <div class="card">
+      <h3>20. Percentage Ring</h3>
+      <div class="visualization"><canvas id="chart20"></canvas></div>
+    </div>
+  </div>
+
+  <script>
+    // State Variables
+    let currentValue = 24.0;
+    let previousValue = 24.0;
+    const historyData = Array(20).fill(24.0);
+    const historyLabels = Array(20).fill('');
+
+    // Audio Context Setup
+    let audioCtx = null;
+    let audioEnabled = false;
+
+    function enableAudio() {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioEnabled = true;
+      document.getElementById('audio-btn').innerText = "Audio Active";
+      document.getElementById('audio-btn').style.background = "#22c55e";
+    }
+
+    function playSound(type) {
+      if (!audioEnabled || !audioCtx) return;
+
+      if (type === 'flush') {
+        // Noise-based Flush sound synthesizer
+        const bufferSize = audioCtx.sampleRate * 1.2;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800, audioCtx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 1.2);
+        
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.2);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        noise.start();
+
+      } else if (type === 'tinkle') {
+        // High pitched "tinkling" chime sound
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200 + Math.random() * 400, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      }
+    }
+
+    // Initialize Chart.js Objects
+    const charts = {};
+
+    function initCharts() {
+      const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { display: false },
+          y: { display: false, min: 0, max: 100 }
+        }
+      };
+
+      // 1. Time History
+      charts.c1 = new Chart(document.getElementById('chart1'), {
+        type: 'line',
+        data: { labels: historyLabels, datasets: [{ data: historyData, borderColor: '#f59e0b', borderWidth: 2, fill: false }] },
+        options: { ...commonOptions, scales: { x: { display: false }, y: { display: true, position: 'right', min: 0, max: 100 } } }
+      });
+
+      // 2. Dial / Gauge (Doughnut representation)
+      charts.c2 = new Chart(document.getElementById('chart2'), {
+        type: 'doughnut',
+        data: { datasets: [{ data: [24, 76], backgroundColor: ['#f59e0b', '#334155'], borderWidth: 0 }] },
+        options: { ...commonOptions, circumference: 180, rotation: 270, cutout: '75%' }
+      });
+
+      // 5. Vertical Bar
+      charts.c5 = new Chart(document.getElementById('chart5'), {
+        type: 'bar',
+        data: { labels: ['Level'], datasets: [{ data: [24], backgroundColor: '#f59e0b' }] },
+        options: commonOptions
+      });
+
+      // 6. Horizontal Bar
+      charts.c6 = new Chart(document.getElementById('chart6'), {
+        type: 'bar',
+        data: { labels: ['Level'], datasets: [{ data: [24], backgroundColor: '#f59e0b' }] },
+        options: { ...commonOptions, indexAxis: 'y', scales: { x: { min: 0, max: 100 }, y: { display: false } } }
+      });
+
+      // 7. Donut Chart
+      charts.c7 = new Chart(document.getElementById('chart7'), {
+        type: 'doughnut',
+        data: { datasets: [{ data: [24, 76], backgroundColor: ['#f59e0b', '#1e293b'] }] },
+        options: commonOptions
+      });
+
+      // 8. Pie Chart
+      charts.c8 = new Chart(document.getElementById('chart8'), {
+        type: 'pie',
+        data: { datasets: [{ data: [24, 76], backgroundColor: ['#f59e0b', '#1e293b'] }] },
+        options: commonOptions
+      });
+
+      // 9. Polar Area
+      charts.c9 = new Chart(document.getElementById('chart9'), {
+        type: 'polarArea',
+        data: { labels: ['Val', 'Max'], datasets: [{ data: [24, 100], backgroundColor: ['#f59e0b', '#1e293b'] }] },
+        options: commonOptions
+      });
+
+      // 10. Radar
+      charts.c10 = new Chart(document.getElementById('chart10'), {
+        type: 'radar',
+        data: { labels: ['Current', 'Top', 'Mid', 'Low'], datasets: [{ data: [24, 100, 50, 0], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.2)' }] },
+        options: { ...commonOptions, scales: { r: { display: false, min: 0, max: 100 } } }
+      });
+
+      // 14. Area Trend
+      charts.c14 = new Chart(document.getElementById('chart14'), {
+        type: 'line',
+        data: { labels: historyLabels, datasets: [{ data: historyData, borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.3)', fill: true }] },
+        options: commonOptions
+      });
+
+      // 15. Stepped Line
+      charts.c15 = new Chart(document.getElementById('chart15'), {
+        type: 'line',
+        data: { labels: historyLabels, datasets: [{ data: historyData, borderColor: '#f59e0b', stepped: true }] },
+        options: commonOptions
+      });
+
+      // 16. Scatter Plot
+      charts.c16 = new Chart(document.getElementById('chart16'), {
+        type: 'scatter',
+        data: { datasets: [{ data: [{ x: 50, y: 24 }], backgroundColor: '#f59e0b', pointRadius: 10 }] },
+        options: { ...commonOptions, scales: { x: { min: 0, max: 100 }, y: { min: 0, max: 100 } } }
+      });
+
+      // 17. Bubble
+      charts.c17 = new Chart(document.getElementById('chart17'), {
+        type: 'bubble',
+        data: { datasets: [{ data: [{ x: 50, y: 50, r: 12 }], backgroundColor: '#f59e0b' }] },
+        options: { ...commonOptions, scales: { x: { min: 0, max: 100 }, y: { min: 0, max: 100 } } }
+      });
+
+      // 18. Capacity vs Remaining
+      charts.c18 = new Chart(document.getElementById('chart18'), {
+        type: 'bar',
+        data: { labels: ['Tank'], datasets: [{ data: [24], backgroundColor: '#f59e0b' }, { data: [76], backgroundColor: '#334155' }] },
+        options: { ...commonOptions, scales: { x: { stacked: true }, y: { stacked: true, min: 0, max: 100 } } }
+      });
+
+      // 19. Sparkline
+      charts.c19 = new Chart(document.getElementById('chart19'), {
+        type: 'line',
+        data: { labels: historyLabels, datasets: [{ data: historyData, borderColor: '#eab308', borderWidth: 1, pointRadius: 0 }] },
+        options: commonOptions
+      });
+
+      // 20. Progress Ring
+      charts.c20 = new Chart(document.getElementById('chart20'), {
+        type: 'doughnut',
+        data: { datasets: [{ data: [24, 76], backgroundColor: ['#f59e0b', 'transparent'], borderWidth: 0 }] },
+        options: { ...commonOptions, cutout: '85%' }
+      });
+    }
+
+    // Main Update Function (Runs every second)
+    function updateDashboard(val) {
+      const delta = val - previousValue;
+
+      // Audio Trigger Check
+      if (delta <= -0.2) {
+        playSound('flush');
+      } else if (delta >= 0.2) {
+        playSound('tinkle');
+      }
+
+      previousValue = val;
+      currentValue = val;
+
+      // Text updates
+      document.getElementById('current-val').innerText = val.toFixed(1);
+      document.getElementById('digital-val').innerText = val.toFixed(1).padStart(4, '0');
+
+      // Update Historical arrays
+      historyData.push(val);
+      historyData.shift();
+
+      // Custom CSS Visuals Update
+      // 3. Cylinder
+      document.getElementById('cylinder-fill').style.height = val + '%';
+
+      // 4. Toilet
+      const tankFill = Math.min(100, Math.max(0, val));
+      document.getElementById('toilet-tank-fill').setAttribute('height', (36 * tankFill / 100));
+      document.getElementById('toilet-tank-fill').setAttribute('y', 12 + (36 * (100 - tankFill) / 100));
+      document.getElementById('toilet-bowl-fill').style.opacity = val / 100;
+
+      // 11. Battery & 12. Thermometer
+      document.getElementById('battery-fill').style.height = val + '%';
+      document.getElementById('thermo-fill').style.height = val + '%';
+
+      // Chart updates
+      charts.c1.data.datasets[0].data = historyData;
+      charts.c1.update();
+
+      charts.c2.data.datasets[0].data = [val, 100 - val];
+      charts.c2.update();
+
+      charts.c5.data.datasets[0].data = [val];
+      charts.c5.update();
+
+      charts.c6.data.datasets[0].data = [val];
+      charts.c6.update();
+
+      charts.c7.data.datasets[0].data = [val, 100 - val];
+      charts.c7.update();
+
+      charts.c8.data.datasets[0].data = [val, 100 - val];
+      charts.c8.update();
+
+      charts.c9.data.datasets[0].data = [val, 100];
+      charts.c9.update();
+
+      charts.c10.data.datasets[0].data[0] = val;
+      charts.c10.update();
+
+      charts.c14.data.datasets[0].data = historyData;
+      charts.c14.update();
+
+      charts.c15.data.datasets[0].data = historyData;
+      charts.c15.update();
+
+      charts.c16.data.datasets[0].data = [{ x: 50, y: val }];
+      charts.c16.update();
+
+      charts.c17.data.datasets[0].data = [{ x: 50, y: 50, r: Math.max(2, val / 3) }];
+      charts.c17.update();
+
+      charts.c18.data.datasets[0].data = [val];
+      charts.c18.data.datasets[1].data = [100 - val];
+      charts.c18.update();
+
+      charts.c19.data.datasets[0].data = historyData;
+      charts.c19.update();
+
+      charts.c20.data.datasets[0].data = [val, 100 - val];
+      charts.c20.update();
+    }
+
+    // Telemetry Fetch & Fallback Simulator
+    async function fetchTelemetry() {
+      try {
+        // Attempt fetching live content from Mimic repository
+        const response = await fetch('https://iss-mimic.github.io/Mimic/', { mode: 'cors' });
+        if (response.ok) {
+          const text = await response.text();
+          const match = text.match(/ETHOS\s+NODE3000005\s+Urine Tank \[%\]\s+([\d.]+)/);
+          if (match && match[1]) {
+            document.getElementById('source-status').innerText = "Live ISS Telemetry";
+            updateDashboard(parseFloat(match[1]));
+            return;
+          }
+        }
+      } catch (e) {
+        // Fallback to local simulation if CORS or network restricts direct scraping
+      }
+
+      // Live Simulation Fallback (modulates around 24% with periodic flushes/rises)
+      document.getElementById('source-status').innerText = "Simulated Loop (ISS Telemetry)";
+      let nextVal = currentValue + (Math.random() * 0.8 - 0.38);
+      if (nextVal > 100) nextVal = 100;
+      if (nextVal < 0) nextVal = 0;
+      updateDashboard(nextVal);
+    }
+
+    // Init Page
+    window.onload = () => {
+      initCharts();
+      setInterval(fetchTelemetry, 1000);
+    };
+  </script>
+</body>
+</html>
